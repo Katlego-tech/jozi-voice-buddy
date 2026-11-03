@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en-ZA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jozi Buddy — a voice AI agent from Joburg</title>
+<meta name="description" content="Jozi Buddy is a voice AI agent that runs on your laptop. Talk out loud and it talks back in near real time, powered by Amazon Nova Sonic and Strands Bidi Agents.">
+<meta name="color-scheme" content="dark">
+<style>
+  :root {
+    --night: #160C28;
+    --dusk: #2A1550;
+    --jacaranda: #6A3BC2;
+    --bloom: #C3A6FF;
+    --ember: #D8673A;
+    --amber: #F4A63A;
+    --sand: #F4EADF;
+    --muted: #BDB2CF;
+    --panel: #1E1036;
+    --line: #3A2560;
+
+    --display: "Bahnschrift", "Avenir Next Condensed", "Fira Sans Condensed",
+               "Roboto Condensed", "Arial Narrow", sans-serif;
+    --body: system-ui, -apple-system, "Segoe UI", "Fira Sans", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Fira Mono", "DejaVu Sans Mono", Consolas, monospace;
+
+    --gutter: clamp(1rem, 4vw, 3rem);
+    --skyline-h: clamp(170px, 22vw, 290px);
+    --measure: 72rem;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--night);
+    color: var(--sand);
+    font: 400 1.0625rem/1.6 var(--body);
+  }
+  a { color: var(--bloom); text-underline-offset: 0.2em; }
+  a:hover { color: var(--sand); }
+  :focus-visible { outline: 3px solid var(--amber); outline-offset: 3px; border-radius: 4px; }
+  .wrap { width: min(100% - 2 * var(--gutter), var(--measure)); margin-inline: auto; }
+  .skip {
+    position: absolute; left: var(--gutter); top: -4rem; z-index: 10;
+    background: var(--amber); color: var(--night); padding: 0.5rem 1rem; font-weight: 700;
+    text-decoration: none; border-radius: 6px;
+  }
+  .skip:focus { top: 1rem; }
+
+  /* ---------- Hero: Joburg at dusk ---------- */
+  .hero {
+    position: relative;
+    background: linear-gradient(to bottom,
+      var(--night) 0%, var(--dusk) 46%, #4A2490 68%, var(--ember) 88%, var(--amber) 100%);
+    padding-top: clamp(2.5rem, 7vw, 5.5rem);
+    overflow: hidden;
+  }
+  .hero-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    gap: clamp(2rem, 5vw, 4.5rem);
+    align-items: start;
+  }
+  .eyebrow {
+    margin: 0 0 0.75rem;
+    font: 600 0.8125rem/1 var(--mono);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--bloom);
+  }
+  h1, h2, .feature h3, .steps li::before { font-style: normal; font-synthesis: none; }
+  h1 {
+    margin: 0;
+    font-family: var(--display);
+    font-stretch: 75%;
+    font-weight: 800;
+    font-size: clamp(4.25rem, 13.5vw, 10rem);
+    line-height: 0.84;
+    letter-spacing: -0.005em;
+    text-transform: uppercase;
+  }
+  h1 span { display: block; }
+  h1 .buddy { color: var(--amber); }
+  .tagline {
+    margin: 1.5rem 0 0;
+    max-width: 34rem;
+    font-size: clamp(1.125rem, 1.6vw, 1.3rem);
+    line-height: 1.5;
+    color: var(--sand);
+  }
+  .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 2rem; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 0.6rem;
+    padding: 0.85rem 1.35rem;
+    border-radius: 999px;
+    font: 700 1rem/1 var(--body);
+    text-decoration: none;
+    border: 2px solid transparent;
+  }
+  .btn-primary { background: var(--amber); color: var(--night); }
+  .btn-primary:hover { background: var(--sand); color: var(--night); }
+  .btn-ghost { border-color: var(--bloom); color: var(--sand); }
+  .btn-ghost:hover { background: var(--bloom); color: var(--night); }
+  .btn svg { width: 1.15em; height: 1.15em; flex: none; }
+
+  /* Example conversation: live captions */
+  .captions {
+    margin: 0;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 1.25rem 1.25rem 1rem;
+    box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.7);
+  }
+  .captions-head {
+    display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+    margin-bottom: 0.9rem;
+  }
+  .captions-head figcaption {
+    font: 600 0.75rem/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
+  }
+  .legend { display: flex; gap: 0.9rem; font: 500 0.75rem/1 var(--mono); color: var(--muted); }
+  .legend i { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; margin-right: 0.35rem; vertical-align: -0.02em; }
+  .legend .you i { background: var(--bloom); }
+  .legend .bud i { background: var(--amber); }
+  .turns { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.85rem; }
+  .turn { font: 400 0.95rem/1.5 var(--mono); padding-left: 0.9rem; border-left: 3px solid var(--bloom); }
+  .turn.buddy { border-left-color: var(--amber); }
+  .turn b { display: block; font: 700 0.72rem/1.4 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--bloom); }
+  .turn.buddy b { color: var(--amber); }
+  .turn .w { transition: opacity 0.18s ease; }
+  .captions.playing .turn .w { opacity: 0; }
+  .captions.playing .turn .w.on { opacity: 1; }
+  .captions-foot {
+    display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+    margin-top: 1rem; padding-top: 0.8rem; border-top: 1px solid var(--line);
+    font-size: 0.85rem; color: var(--muted);
+  }
+  .replay {
+    flex: none; background: none; border: 1px solid var(--line); color: var(--sand);
+    font: 600 0.8rem/1 var(--mono); padding: 0.5rem 0.8rem; border-radius: 999px; cursor: pointer;
+  }
+  .replay:hover { border-color: var(--bloom); }
+
+  /* Signature: the skyline as a level meter */
+  .skyline { display: block; width: 100%; height: var(--skyline-h); margin-top: clamp(2rem, 5vw, 3.5rem); }
+  .skyline .body { fill: var(--night); }
+  .skyline .lit rect { transition: fill 0.4s ease; }
+
+  /* ---------- Sections ---------- */
+  section { padding-block: clamp(3.5rem, 8vw, 6rem); }
+  h2 {
+    margin: 0 0 0.5rem;
+    font-family: var(--display); font-stretch: 75%; font-weight: 800;
+    font-size: clamp(2.25rem, 5vw, 3.5rem); line-height: 0.95; text-transform: uppercase;
+  }
+  .lede { margin: 0 0 2.5rem; max-width: 40rem; color: var(--muted); }
+
+  .features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.25rem; }
+  .feature {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    padding: 1.5rem; border-top: 4px solid var(--amber);
+  }
+  .feature:nth-child(2) { border-top-color: var(--bloom); }
+  .feature:nth-child(3) { border-top-color: var(--ember); }
+  .feature h3 {
+    margin: 0 0 0.6rem;
+    font-family: var(--display); font-stretch: 75%; font-weight: 700;
+    font-size: 1.6rem; line-height: 1; text-transform: uppercase;
+  }
+  .feature p { margin: 0; color: var(--muted); }
+
+  .run { border-top: 1px solid var(--line); }
+  .steps { list-style: none; counter-reset: step; margin: 0; padding: 0; display: grid; gap: 1.1rem; max-width: 48rem; }
+  .steps li {
+    counter-increment: step;
+    display: grid; grid-template-columns: 2.5rem minmax(0, 1fr); gap: 0 1rem; align-items: start;
+  }
+  .steps li::before {
+    content: counter(step);
+    font: 800 1.6rem/1.1 var(--display); font-stretch: 75%; color: var(--amber);
+    text-align: right;
+  }
+  .steps h3 { margin: 0 0 0.4rem; font: 700 1.05rem/1.3 var(--body); }
+  .steps p { margin: 0 0 0.5rem; color: var(--muted); font-size: 0.95rem; }
+  .cmd {
+    display: flex; align-items: stretch; background: #0F081C; border: 1px solid var(--line);
+    border-radius: 10px; overflow: hidden;
+  }
+  .cmd code {
+    flex: 1; min-width: 0; padding: 0.75rem 0.9rem; overflow-x: auto; white-space: pre;
+    font: 400 0.9rem/1.5 var(--mono); color: var(--sand);
+  }
+  .copy {
+    flex: none; border: 0; border-left: 1px solid var(--line); background: var(--panel); color: var(--bloom);
+    font: 600 0.78rem/1 var(--mono); padding: 0 0.9rem; cursor: pointer; min-width: 5.5rem;
+  }
+  .copy:hover { color: var(--sand); }
+  /* .cmd clips overflow, so focus rings inside it are drawn inset instead of outside. */
+  .copy:focus-visible, .cmd code:focus-visible { outline-offset: -3px; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+  .note { margin-top: 2rem; max-width: 48rem; font-size: 0.95rem; color: var(--muted); }
+
+  .stack { border-top: 1px solid var(--line); }
+  .stack dl { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .stack dl > div { background: var(--night); padding: 1.25rem 1.4rem; }
+  .stack dt { font: 700 1.05rem/1.3 var(--body); color: var(--sand); }
+  .stack dd { margin: 0.3rem 0 0; color: var(--muted); font-size: 0.95rem; }
+
+  footer { border-top: 1px solid var(--line); padding-block: 2rem 2.5rem; color: var(--muted); font-size: 0.9rem; }
+  footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.75rem 2rem; }
+
+  @media (max-width: 860px) {
+    .hero-grid { grid-template-columns: minmax(0, 1fr); }
+    .features { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 480px) {
+    .steps li { grid-template-columns: 1.6rem minmax(0, 1fr); gap: 0 0.7rem; }
+    .captions-head { flex-direction: column; align-items: flex-start; gap: 0.6rem; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .turn .w, .skyline .lit rect { transition: none; }
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <p class="eyebrow">A voice buddy from Joburg</p>
+      <h1><span>Jozi</span><span class="buddy">Buddy</span></h1>
+      <p class="tagline">Talk out loud and it talks back, in near real time. A voice AI agent powered by
+        Amazon Nova Sonic and Strands Bidi Agents, running on your own laptop.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="https://github.com/Katlego-tech/jozi-voice-buddy">
+          <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          View the code on GitHub
+        </a>
+        <a class="btn btn-ghost" href="#run">Run it locally</a>
+      </div>
+    </div>
+
+    <figure class="captions" id="captions" aria-label="Example conversation with Jozi Buddy">
+      <div class="captions-head">
+        <figcaption>Example conversation</figcaption>
+        <div class="legend" aria-hidden="true"><span class="you"><i></i>You</span><span class="bud"><i></i>Jozi Buddy</span></div>
+      </div>
+      <ol class="turns">
+        <li class="turn you"><b>You</b>Howzit! Where should I grab breakfast in Sandton?</li>
+        <li class="turn buddy"><b>Jozi Buddy</b>I can't check what's open right now, but recent reviews are a good place to start. Pick one close to you.</li>
+        <li class="turn you"><b>You</b>What time does the Neighbourgoods Market close today?</li>
+        <li class="turn buddy"><b>Jozi Buddy</b>Eish, I can't check live times. Best to confirm with the market before you head out.</li>
+      </ol>
+      <div class="captions-foot">
+        <span>No live data, so it says when it can't check something.</span>
+        <button class="replay" type="button" id="replay">Replay</button>
+      </div>
+    </figure>
+  </div>
+
+  <svg class="skyline" id="skyline" viewBox="0 0 1152 250" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+    <defs>
+      <pattern id="seg" width="9" height="7" patternUnits="userSpaceOnUse">
+        <rect width="9" height="5" fill="#fff"/>
+      </pattern>
+      <mask id="segmask" maskUnits="userSpaceOnUse" x="0" y="0" width="1152" height="250">
+        <rect width="1152" height="250" fill="url(#seg)"/>
+      </mask>
+    </defs>
+    <g mask="url(#segmask)">
+      <g class="body"></g>
+      <g class="lit"></g>
+    </g>
+    <rect y="246" width="1152" height="4" style="fill: var(--night)"/>
+  </svg>
+</header>
+
+<p class="sr-only" role="status" aria-live="polite" id="copy-status"></p>
+
+<main id="main">
+  <section aria-labelledby="what">
+    <div class="wrap">
+      <h2 id="what">What it does</h2>
+      <p class="lede">A friendly Johannesburg voice companion you chat with out loud. It keeps replies to a sentence
+        or two, suggests things to do in the city, and tells you plainly when it doesn't know.</p>
+      <div class="features">
+        <article class="feature">
+          <h3>Real-time voice</h3>
+          <p>Speak naturally and cut in whenever you like. It stops talking and listens, and echo
+            cancellation keeps it from hearing itself through laptop speakers.</p>
+        </article>
+        <article class="feature">
+          <h3>Powered by Nova Sonic</h3>
+          <p>Amazon Nova 2.5 Sonic on Amazon Bedrock turns your speech straight into a spoken reply,
+            with no separate transcription or text-to-speech step.</p>
+        </article>
+        <article class="feature">
+          <h3>Ready for Kiro</h3>
+          <p>Kiro steering files ship with the repo, so Kiro knows the model, region and house rules
+            from your first prompt.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="run" id="run" aria-labelledby="run-title">
+    <div class="wrap">
+      <h2 id="run-title">Run it locally</h2>
+      <p class="lede">You need Python 3.12, a microphone and speakers, and an AWS account that can use
+        Amazon Nova 2.5 Sonic. Commands are for Linux and macOS.</p>
+      <ol class="steps">
+        <li>
+          <div>
+            <h3>Get the code</h3>
+            <div class="cmd"><code tabindex="0" aria-label="Commands for step 1">git clone https://github.com/Katlego-tech/jozi-voice-buddy.git
+cd jozi-voice-buddy</code><button class="copy" type="button">Copy</button></div>
+          </div>
+        </li>
+        <li>
+          <div>
+            <h3>Install PortAudio</h3>
+            <p>Linux only. PyAudio builds against it. On macOS use <code>brew install portaudio</code>.</p>
+            <div class="cmd"><code tabindex="0" aria-label="Commands for step 2">sudo apt install portaudio19-dev</code><button class="copy" type="button">Copy</button></div>
+          </div>
+        </li>
+        <li>
+          <div>
+            <h3>Create a virtual environment and install</h3>
+            <p>No <code>python3.12</code> command? With uv, use <code>uv venv --python 3.12 .venv</code>
+              and <code>uv pip install -r requirements.txt</code>.</p>
+            <div class="cmd"><code tabindex="0" aria-label="Commands for step 3">python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt</code><button class="copy" type="button">Copy</button></div>
+          </div>
+        </li>
+        <li>
+          <div>
+            <h3>Sign in to AWS</h3>
+            <p>Short-lived credentials through your browser. No access keys to store.</p>
+            <div class="cmd"><code tabindex="0" aria-label="Commands for step 4">aws configure set region eu-north-1 --profile jozi-buddy
+aws login --profile jozi-buddy</code><button class="copy" type="button">Copy</button></div>
+          </div>
+        </li>
+        <li>
+          <div>
+            <h3>Start talking</h3>
+            <p>Say hi once it's listening. Press Ctrl+C to end the chat.</p>
+            <div class="cmd"><code tabindex="0" aria-label="Commands for step 5">python voice_agent.py</code><button class="copy" type="button">Copy</button></div>
+          </div>
+        </li>
+      </ol>
+      <p class="note">Nova Sonic runs in eu-north-1 and us-east-1. To use another profile or region, set
+        <code>AWS_PROFILE</code> or <code>JOZI_BUDDY_REGION</code> before step 5.</p>
+    </div>
+  </section>
+
+  <section class="stack" aria-labelledby="stack-title">
+    <div class="wrap">
+      <h2 id="stack-title">Tech stack</h2>
+      <p class="lede">Small on purpose: one Python script and a managed speech model.</p>
+      <dl>
+        <div><dt>Python 3.12</dt><dd>Runs the agent on your laptop.</dd></div>
+        <div><dt>Strands Agents</dt><dd>The Bidi API streams audio both ways at once.</dd></div>
+        <div><dt>Amazon Nova 2.5 Sonic</dt><dd>Speech in, speech out, in one model.</dd></div>
+        <div><dt>Amazon Bedrock</dt><dd>Hosts the model, called from eu-north-1.</dd></div>
+        <div><dt>Kiro IDE</dt><dd>Steering files included for AI pairing.</dd></div>
+      </dl>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Made in Joburg by Katlego. Started at Mzansi AWS Community Day.</span>
+    <a href="https://github.com/Katlego-tech/jozi-voice-buddy">github.com/Katlego-tech/jozi-voice-buddy</a>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---- Skyline: column ranges [from, to] in px above ground (ground = y 246) ---- */
+  const H = [18, 24, 24, 30, 22, 28, 46, 46, 20,
+    150, 158, 160, 160, 158, 150,            // Ponte City
+    60, 70, 34, 96, 96, 110, 110, 40,
+    198, 198, 198, 198,                      // Carlton Centre
+    120, 128, 70, 84, 92, 50, 30, 40, 36,
+    0, 226, 0,                               // Hillbrow Tower shaft (pod added below)
+    64, 58, 72, 104, 112, 112, 100, 44, 66, 80, 80, 62, 30, 36, 26, 88, 88, 94,
+    40, 34, 28, 46, 22, 26, 18];
+  const core = H.map((h) => (h ? [[0, h]] : []));
+  core[10].push([166, 182]); core[11].push([166, 182]); core[12].push([166, 182]); core[13].push([166, 182]); // Ponte sign
+  core[36].push([168, 198]); core[38].push([168, 198]);                                                  // Hillbrow pod
+  // Low suburbs either side of the CBD, so the skyline spans wide screens (deterministic, not random).
+  const suburb = (i) => [[0, 14 + ((i * 37) % 5) * 8 + ((i * 13) % 3) * 6 + (i % 11 === 4 ? 26 : 0)]];
+  const SIDE = 32;
+  const cols = [
+    ...Array.from({ length: SIDE }, (_, i) => suburb(i + 3)),
+    ...core,
+    ...Array.from({ length: SIDE }, (_, i) => suburb(i + 41)),
+  ];
+  const GROUND = 246, W = 9, BAR = 7;
+  const svg = document.getElementById("skyline");
+  const NS = "http://www.w3.org/2000/svg";
+  const bodyG = svg.querySelector(".body"), litG = svg.querySelector(".lit");
+  const lit = [];
+  cols.forEach((ranges, c) => {
+    const top = Math.max(0, ...ranges.map((r) => r[1]));
+    ranges.forEach(([a, b]) => {
+      const r = document.createElementNS(NS, "rect");
+      r.setAttribute("x", c * W); r.setAttribute("width", BAR);
+      r.setAttribute("y", GROUND - b); r.setAttribute("height", b - a);
+      bodyG.appendChild(r);
+      const l = document.createElementNS(NS, "rect");
+      l.setAttribute("x", c * W); l.setAttribute("width", BAR); l.setAttribute("height", 0);
+      litG.appendChild(l);
+      lit.push({ el: l, c, a, b, top });
+    });
+  });
+
+  const COLORS = { idle: "#F4A63A", you: "#C3A6FF", buddy: "#F4A63A" };
+  let mode = "idle";
+  function paint(level) {
+    for (const s of lit) {
+      const reach = level(s.c) * s.top;           // how high this column is lit
+      const hi = Math.min(s.b, reach);
+      const h = Math.max(0, hi - s.a);
+      s.el.setAttribute("y", GROUND - s.a - h);
+      s.el.setAttribute("height", h);
+    }
+  }
+  function setColor(m) {
+    litG.setAttribute("fill", COLORS[m]);
+    litG.setAttribute("opacity", m === "idle" ? 0.35 : 0.9);
+  }
+  setColor("idle");
+
+  if (reduce) {
+    paint((c) => 0.3 + 0.15 * Math.sin(c * 0.7));
+  } else {
+    const t0 = performance.now();
+    const frame = (now) => {
+      const t = (now - t0) / 1000;
+      if (mode === "idle") {
+        paint((c) => 0.14 + 0.06 * Math.sin(t * 0.8 + c * 0.35));
+      } else {
+        const speed = mode === "buddy" ? 6.2 : 5.1;
+        paint((c) => 0.25 + 0.6 * Math.abs(Math.sin(t * speed + c * 0.55) * Math.sin(t * 2.3 + c * 0.17)));
+      }
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  }
+
+  /* ---- Captions: reveal word by word at speaking pace, lighting the skyline ---- */
+  const fig = document.getElementById("captions");
+  const turns = [...fig.querySelectorAll(".turn")];
+  turns.forEach((li) => {
+    const words = li.lastChild.textContent.trim().split(/\s+/);
+    li.lastChild.remove();
+    words.forEach((w, i) => {
+      const s = document.createElement("span");
+      s.className = "w"; s.textContent = w + (i < words.length - 1 ? " " : "");
+      li.appendChild(s);
+    });
+  });
+
+  let timers = [];
+  function play() {
+    timers.forEach(clearTimeout); timers = [];
+    if (reduce) return;
+    fig.classList.add("playing");
+    fig.querySelectorAll(".w").forEach((w) => w.classList.remove("on"));
+    let at = 500;
+    turns.forEach((li) => {
+      const who = li.classList.contains("buddy") ? "buddy" : "you";
+      timers.push(setTimeout(() => { mode = who; setColor(who); }, at));
+      li.querySelectorAll(".w").forEach((w) => {
+        timers.push(setTimeout(() => w.classList.add("on"), at));
+        at += who === "buddy" ? 300 : 340;
+      });
+      at += 650;
+      timers.push(setTimeout(() => { mode = "idle"; setColor("idle"); }, at - 450));
+    });
+    timers.push(setTimeout(() => fig.classList.remove("playing"), at));
+  }
+  document.getElementById("replay").addEventListener("click", play);
+  if (reduce) document.getElementById("replay").hidden = true;
+  play();
+
+  /* ---- Copy buttons: named per step, result announced, one reset timer per button ---- */
+  const status = document.getElementById("copy-status");
+  document.querySelectorAll(".cmd").forEach((box, i) => {
+    const btn = box.querySelector(".copy");
+    const code = box.querySelector("code");
+    const step = i + 1;
+    let reset;
+    btn.setAttribute("aria-label", `Copy the commands for step ${step}`);
+    btn.addEventListener("click", async () => {
+      clearTimeout(reset);
+      try {
+        await navigator.clipboard.writeText(code.textContent);
+        btn.textContent = "Copied";
+        status.textContent = `Step ${step} commands copied.`;
+      } catch {
+        const range = document.createRange(); range.selectNodeContents(code);
+        const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range);
+        btn.textContent = "Selected";
+        status.textContent = `Step ${step} commands selected. Press Ctrl+C to copy.`;
+      }
+      reset = setTimeout(() => (btn.textContent = "Copy"), 1600);
+    });
+  });
+})();
+</script>
+</body>
+</html>
