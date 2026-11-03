@@ -30,7 +30,8 @@ silence.
 - **Python 3.12**
 - **A microphone and speakers** (headphones are nicer, but laptop speakers work)
 - **An AWS account** that can use Amazon Nova 2.5 Sonic. It's offered in `eu-north-1` and
-  `us-east-1`. Usage is billed per minute of audio; a few test chats cost well under US$1.
+  `us-east-1`. Usage is billed by Amazon Bedrock; see
+  [Amazon Bedrock pricing](https://aws.amazon.com/bedrock/pricing/) for current Nova Sonic rates.
 - **AWS CLI v2** with `aws login` (browser sign-in, no access keys)
 - **PortAudio headers** on Linux (see setup), because PyAudio builds from source there
 
@@ -70,7 +71,8 @@ Commands are for Linux and macOS.
    aws login --profile jozi-buddy
    ```
 
-   The session lasts 12 hours and can be renewed for up to 90 days without signing in again.
+   The session lasts 12 hours and can be renewed for up to 90 days without signing in again
+   (per the [Agent Toolkit for AWS setup guide](https://github.com/aws/agent-toolkit-for-aws/blob/main/setup-instructions/setup.md)).
 
 ## Run it
 
@@ -107,11 +109,13 @@ When you see `Jozi Buddy is listening`, say hi. A `Speak…` prompt shows while 
 | `Can't sign in to AWS with profile '…'` | Your session expired or the profile doesn't exist. Run the `aws login --profile …` command it prints. |
 | `Amazon Nova Sonic (…) isn't available in …` | That region doesn't offer the model. Use `JOZI_BUDDY_REGION=eu-north-1` (or `us-east-1`). |
 | `Amazon Bedrock refused access to …` | Your account or role can't use the model in that region. Check model access in the Bedrock console and your IAM permissions. |
+| `Amazon Bedrock error (…) for …` | Bedrock rejected the request for another reason, named in the brackets (for example `ThrottlingException`). Wait a moment and try again; if it repeats, the message after the colon says why. |
 | `Couldn't confirm … is available …; trying anyway.` | Your credentials can't call `bedrock:GetFoundationModel`. It carries on; if it then stays silent, check the region. |
 | `Can't use the microphone or speakers` | No default input or output device. Check your sound settings and that the mic isn't muted. |
 | It cuts itself off a few words into each reply | Echo isn't being cancelled. Use headphones, or lower the speaker volume. |
 
-Exit codes: `0` normal end, `2` sign-in, `3` audio device, `4` Bedrock or region, `5` network.
+Exit codes: `0` normal end, `1` unexpected error (Python prints a traceback; please open an issue),
+`2` sign-in, `3` audio device, `4` Bedrock or region, `5` network.
 
 ## Development
 
