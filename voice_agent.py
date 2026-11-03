@@ -37,9 +37,15 @@ _PERSONA: Final = (
     "the city when it comes up. Keep spoken replies to one or two short sentences, because this is a "
     "voice conversation, not an essay."
 )
+_GROUNDING: Final = (
+    "You have no internet access and no live information. Never state opening hours, prices, addresses, "
+    "directions, event dates, or safety conditions as facts. If you are asked for any of these, say you "
+    "can't check that right now and suggest confirming with the venue or a current local source. If you "
+    "are not sure something is true, say so instead of guessing."
+)
 _GOODBYE: Final = "If the user says goodbye, say goodbye back warmly."
 
-SYSTEM_PROMPT: Final = "\n\n".join([_PERSONA, _GOODBYE])
+SYSTEM_PROMPT: Final = "\n\n".join([_PERSONA, _GROUNDING, _GOODBYE])
 
 
 class CredentialsUnavailable(Exception):
