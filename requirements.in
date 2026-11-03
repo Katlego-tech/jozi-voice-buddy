@@ -1,0 +1,5 @@
+# Direct runtime dependencies. Edit this file, then recompile requirements.txt:
+#   uv pip compile requirements.in --python-version 3.12 -o requirements.txt
+strands-agents[bidi-all,bidi-pyaudio]==1.63.0
+boto3==1.43.123
+botocore==1.43.123
