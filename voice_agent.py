@@ -5,6 +5,8 @@ Run it with `python voice_agent.py`, talk out loud, and press Ctrl+C to end the 
 
 from __future__ import annotations
 
+import asyncio
+import os
 import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -12,7 +14,14 @@ from typing import Any, Final, Protocol
 
 import boto3
 import pyaudio
-from botocore.exceptions import ClientError
+from aws_sdk_bedrock_runtime.models import AccessDeniedException, ServiceError
+from botocore.exceptions import (
+    ClientError,
+    EndpointConnectionError,
+    LoginError,
+    NoCredentialsError,
+    ProfileNotFound,
+)
 from strands.bidi.agent import BidiAgent
 from strands.bidi.io import AudioIO
 from strands.bidi.models import BedrockNovaSonicModel, BidiModel
@@ -138,3 +147,105 @@ def build_agent(
 async def converse(agent: BidiAgent, audio: AudioIO) -> None:
     """Stream the microphone to the agent and its replies to the speakers until the chat ends."""
     await agent.run(inputs=[audio.input()], outputs=[audio.output()])
+
+
+# Errors that can surface from inside the conversation, where Strands' cleanup masks them (see main).
+KNOWN_RUNTIME_ERRORS: Final = (ServiceError, LoginError, NoCredentialsError, CredentialsUnavailable)
+_MAX_CHAIN: Final = 20
+
+
+def find_known_error(exc: BaseException) -> BaseException | None:
+    """Walk `__cause__` (else `__context__`) from `exc` and return the first known runtime error.
+
+    Strands' `run()` cleanup raises its own RuntimeError while a Bedrock or credentials error is
+    propagating, so the real error is only reachable through the exception chain.
+    """
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    for _ in range(_MAX_CHAIN):
+        if current is None or id(current) in seen:
+            return None
+        if isinstance(current, KNOWN_RUNTIME_ERRORS):
+            return current
+        seen.add(id(current))
+        current = current.__cause__ if current.__cause__ is not None else current.__context__
+    return None
+
+
+def _fail(*lines: str) -> None:
+    print("\n".join(lines), file=sys.stderr)
+
+
+def _sign_in_failed(settings: Settings, reason: object) -> int:
+    _fail(
+        f"Can't sign in to AWS with profile '{settings.profile}': {reason}",
+        f"Run: aws login --profile {settings.profile}",
+    )
+    return 2
+
+
+def _bedrock_failed(settings: Settings, error: ServiceError) -> int:
+    where = f"{settings.model_id} in {settings.region}"
+    if isinstance(error, AccessDeniedException):
+        _fail(
+            f"Amazon Bedrock refused access to {where}: {error}",
+            "Check that this account can use the model in that region.",
+        )
+    else:
+        _fail(f"Amazon Bedrock error ({type(error).__name__}) for {where}: {error}")
+    return 4
+
+
+def main(env: Mapping[str, str] | None = None) -> int:
+    """Run one conversation. Exit codes: 0 ok, 2 sign-in, 3 audio, 4 Bedrock, 5 network."""
+    settings = Settings.from_env(os.environ if env is None else env)
+    try:
+        try:
+            session = make_session(settings)
+            check_credentials(session)
+            check_model_available(session, settings.model_id)
+            check_audio_devices()
+        except (ProfileNotFound, CredentialsUnavailable, NoCredentialsError, LoginError) as error:
+            return _sign_in_failed(settings, error)
+        except ModelUnavailable:
+            _fail(
+                f"Amazon Nova Sonic ({settings.model_id}) isn't available in {settings.region}.",
+                "Set JOZI_BUDDY_REGION to a region that offers it, such as eu-north-1.",
+            )
+            return 4
+        except EndpointConnectionError as error:
+            _fail(
+                f"Can't reach AWS in {settings.region}: {error}",
+                "Check your internet connection, then run Jozi Buddy again.",
+            )
+            return 5
+        except AudioDeviceUnavailable as error:
+            _fail(
+                f"Can't use the microphone or speakers: {error}",
+                "Check your sound settings, then run Jozi Buddy again.",
+            )
+            return 3
+
+        agent = build_agent(settings, session)
+        audio = AudioIO(audio_processor=True)
+        print(
+            f"Jozi Buddy is listening (AWS profile '{settings.profile}', {settings.region}). "
+            "Start talking \u2014 press Ctrl+C to end the chat."
+        )
+        try:
+            asyncio.run(converse(agent, audio))
+        except Exception as error:
+            known = find_known_error(error)
+            if isinstance(known, ServiceError):
+                return _bedrock_failed(settings, known)
+            if known is not None:
+                return _sign_in_failed(settings, known)
+            raise
+    except KeyboardInterrupt:
+        pass
+    print("\nConversation ended. Goodbye!")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
