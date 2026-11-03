@@ -1,0 +1,5 @@
+{
+  "include": ["voice_agent.py", "tests"],
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "basic"
+}
