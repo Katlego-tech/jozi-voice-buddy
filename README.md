@@ -104,6 +104,7 @@ When you see `Jozi Buddy is listening`, say hi. A `Speak…` prompt shows while 
 
 | You see | What to do |
 | --- | --- |
+| `ModuleNotFoundError: No module named 'boto3'` with the venv active | A shell alias for `python` (for example `alias python='python3.11'` in `~/.bashrc`) runs before the venv. Use `python3 voice_agent.py` or `.venv/bin/python voice_agent.py`, or remove the alias. `type python` shows whether one is set. |
 | `pip install` fails building **PyAudio** (`portaudio.h: No such file or directory`) | Install the PortAudio headers: `sudo apt install portaudio19-dev`, then rerun `pip install -r requirements.txt`. |
 | About a dozen lines starting **`ALSA lib …`** when it starts (Linux) | Expected and harmless: PyAudio probing sound devices. It still works; ignore them. |
 | `Can't sign in to AWS with profile '…'` | Your session expired or the profile doesn't exist. Run the `aws login --profile …` command it prints. |
