@@ -129,8 +129,11 @@ def check_model_available(session: boto3.Session, model_id: str) -> None:
 
 
 def check_audio_devices(pa_factory: Callable[[], PyAudioLike] = pyaudio.PyAudio) -> None:
-    """Fail before the conversation starts if there is no default microphone or speaker."""
-    pa = pa_factory()
+    """Fail before the conversation starts if PortAudio won't start or there's no default mic or speaker."""
+    try:
+        pa = pa_factory()  # PyAudio() initialises PortAudio, which raises OSError with no sound system
+    except OSError as error:
+        raise AudioDeviceUnavailable(str(error)) from error
     try:
         pa.get_default_input_device_info()
         pa.get_default_output_device_info()
