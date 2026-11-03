@@ -1,0 +1,61 @@
+name: checks
+
+# Runs on every pull request and on main after a merge. Not on plain branch pushes: that would run
+# twice for any branch with an open PR, and no concurrency group can merge the two.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A newer push to a PR replaces its old run; runs on main always finish, so no merge goes unchecked.
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false  # no later step needs the token
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: "3.12.13"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install PortAudio headers (PyAudio builds from source on Linux)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends portaudio19-dev
+
+      - name: Install pinned dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Format
+        run: ruff format --check .
+
+      - name: Types
+        run: pyright
+
+      - name: Tests
+        run: pytest -q
+
+      - name: Scan dependencies for known vulnerabilities
+        env:
+          OSV_VERSION: v2.5.1
+          OSV_SHA256: f9f25499a2c8cc367b3af45df2ea7eeca7fbccceab9c35079968f4b3652194be
+        run: |
+          base="https://github.com/google/osv-scanner/releases/download/${OSV_VERSION}"
+          curl -fsSL -o osv-scanner "${base}/osv-scanner_linux_amd64"
+          echo "${OSV_SHA256}  osv-scanner" | sha256sum -c -
+          chmod +x osv-scanner
+          # Both files are full locks, so osv-scanner must not try to re-resolve them.
+          ./osv-scanner scan source --no-resolve -L requirements.txt -L requirements-dev.txt
