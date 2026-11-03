@@ -175,7 +175,7 @@ class FakeBedrockClient:
         self.status, self.error = status, error
         self.requested: list[str] = []
 
-    def get_foundation_model(self, *, modelIdentifier: str) -> dict[str, Any]:  # noqa: N803 - boto3's name
+    def get_foundation_model(self, *, modelIdentifier: str) -> dict[str, Any]:
         self.requested.append(modelIdentifier)
         if self.error is not None:
             raise self.error
@@ -282,6 +282,13 @@ class TestCheckAudioDevices:
         pa = FakePyAudio()
         check_audio_devices(lambda: pa)
         assert pa.terminated == 1
+
+    def test_portaudio_failing_to_start_is_unavailable(self) -> None:
+        def broken_factory() -> FakePyAudio:
+            raise OSError("PortAudio could not be initialised")
+
+        with pytest.raises(AudioDeviceUnavailable, match="PortAudio could not be initialised"):
+            check_audio_devices(broken_factory)
 
     @pytest.mark.parametrize("which", ["input", "output"])
     def test_missing_device_is_unavailable_and_still_releases_pyaudio(self, which: str) -> None:
@@ -532,6 +539,16 @@ class TestMainConversationFailures:
             "Your session has expired or credentials have changed. Please reauthenticate using 'aws login'."
         )
         assert capsys.readouterr().err == SIGN_IN.format(reason=reason)
+
+    @pytest.mark.parametrize(
+        "step", ["make_session", "check_credentials", "check_model_available", "check_audio_devices"]
+    )
+    def test_an_unexpected_preflight_error_is_not_swallowed(self, steps: Steps, step: str) -> None:
+        boom = client_error("ThrottlingException", "slow down")
+        steps.raises[step] = boom
+        with pytest.raises(ClientError) as caught:
+            main({})
+        assert caught.value is boom
 
     def test_an_unexpected_error_is_not_swallowed(self, steps: Steps) -> None:
         boom = RuntimeError("a real bug")
