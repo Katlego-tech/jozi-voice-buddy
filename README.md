@@ -59,6 +59,10 @@ Commands are for Linux and macOS.
    pip install -r requirements.txt
    ```
 
+   No `python3.12` command? If you use [uv](https://docs.astral.sh/uv/), create the environment with
+   `uv venv --python 3.12 .venv` instead of the first line, and install with
+   `uv pip install -r requirements.txt`.
+
 4. **Sign in to AWS** with short-lived credentials through your browser
 
    ```bash
