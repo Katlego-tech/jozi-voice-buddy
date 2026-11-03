@@ -539,3 +539,31 @@ class TestMainConversationFailures:
         with pytest.raises(RuntimeError) as caught:
             main({})
         assert caught.value is boom
+
+
+# ------------------------------------------------------------------- grounding (US2) ----
+
+DESIGNED_PROMPT = (
+    "You are Jozi Buddy, a warm and friendly voice companion based in Johannesburg, South Africa. "
+    "You chat casually with the user, help them think through small decisions, and share tips about the "
+    "city when it comes up. Keep spoken replies to one or two short sentences, because this is a voice "
+    "conversation, not an essay.\n"
+    "\n"
+    "You have no internet access and no live information. Never state opening hours, prices, addresses, "
+    "directions, event dates, or safety conditions as facts. If you are asked for any of these, say you "
+    "can't check that right now and suggest confirming with the venue or a current local source. If you "
+    "are not sure something is true, say so instead of guessing.\n"
+    "\n"
+    "If the user says goodbye, say goodbye back warmly."
+)
+
+
+class TestSystemPromptGrounding:
+    def test_the_built_agent_uses_the_designed_prompt_verbatim(self, session: boto3.Session) -> None:
+        agent = build_agent(Settings.from_env({}), session)
+        assert agent.system_prompt == DESIGNED_PROMPT
+
+    def test_the_prompt_states_it_has_no_live_information(self, session: boto3.Session) -> None:
+        agent = build_agent(Settings.from_env({}), session)
+        assert agent.system_prompt is not None
+        assert "no live information" in agent.system_prompt
