@@ -197,6 +197,12 @@
     font: 600 0.78rem/1 var(--mono); padding: 0 0.9rem; cursor: pointer; min-width: 5.5rem;
   }
   .copy:hover { color: var(--sand); }
+  /* .cmd clips overflow, so focus rings inside it are drawn inset instead of outside. */
+  .copy:focus-visible, .cmd code:focus-visible { outline-offset: -3px; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
   .note { margin-top: 2rem; max-width: 48rem; font-size: 0.95rem; color: var(--muted); }
 
   .stack { border-top: 1px solid var(--line); }
@@ -247,9 +253,9 @@
       </div>
       <ol class="turns">
         <li class="turn you"><b>You</b>Howzit! Where should I grab breakfast in Sandton?</li>
-        <li class="turn buddy"><b>Jozi Buddy</b>Sandton has plenty of brunch spots. I'd check a few recent reviews and pick one close to you.</li>
+        <li class="turn buddy"><b>Jozi Buddy</b>I can't check what's open right now, but recent reviews are a good place to start. Pick one close to you.</li>
         <li class="turn you"><b>You</b>What time does the Neighbourgoods Market close today?</li>
-        <li class="turn buddy"><b>Jozi Buddy</b>Eish, I can't check live times. Best to look at the market's own page before you head out.</li>
+        <li class="turn buddy"><b>Jozi Buddy</b>Eish, I can't check live times. Best to confirm with the market before you head out.</li>
       </ol>
       <div class="captions-foot">
         <span>No live data, so it says when it can't check something.</span>
@@ -274,6 +280,8 @@
     <rect y="246" width="1152" height="4" style="fill: var(--night)"/>
   </svg>
 </header>
+
+<p class="sr-only" role="status" aria-live="polite" id="copy-status"></p>
 
 <main id="main">
   <section aria-labelledby="what">
@@ -310,7 +318,7 @@
         <li>
           <div>
             <h3>Get the code</h3>
-            <div class="cmd"><code>git clone https://github.com/Katlego-tech/jozi-voice-buddy.git
+            <div class="cmd"><code tabindex="0" aria-label="Commands for step 1">git clone https://github.com/Katlego-tech/jozi-voice-buddy.git
 cd jozi-voice-buddy</code><button class="copy" type="button">Copy</button></div>
           </div>
         </li>
@@ -318,7 +326,7 @@ cd jozi-voice-buddy</code><button class="copy" type="button">Copy</button></div>
           <div>
             <h3>Install PortAudio</h3>
             <p>Linux only. PyAudio builds against it. On macOS use <code>brew install portaudio</code>.</p>
-            <div class="cmd"><code>sudo apt install portaudio19-dev</code><button class="copy" type="button">Copy</button></div>
+            <div class="cmd"><code tabindex="0" aria-label="Commands for step 2">sudo apt install portaudio19-dev</code><button class="copy" type="button">Copy</button></div>
           </div>
         </li>
         <li>
@@ -326,7 +334,7 @@ cd jozi-voice-buddy</code><button class="copy" type="button">Copy</button></div>
             <h3>Create a virtual environment and install</h3>
             <p>No <code>python3.12</code> command? With uv, use <code>uv venv --python 3.12 .venv</code>
               and <code>uv pip install -r requirements.txt</code>.</p>
-            <div class="cmd"><code>python3.12 -m venv .venv
+            <div class="cmd"><code tabindex="0" aria-label="Commands for step 3">python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt</code><button class="copy" type="button">Copy</button></div>
           </div>
@@ -335,7 +343,7 @@ pip install -r requirements.txt</code><button class="copy" type="button">Copy</b
           <div>
             <h3>Sign in to AWS</h3>
             <p>Short-lived credentials through your browser. No access keys to store.</p>
-            <div class="cmd"><code>aws configure set region eu-north-1 --profile jozi-buddy
+            <div class="cmd"><code tabindex="0" aria-label="Commands for step 4">aws configure set region eu-north-1 --profile jozi-buddy
 aws login --profile jozi-buddy</code><button class="copy" type="button">Copy</button></div>
           </div>
         </li>
@@ -343,7 +351,7 @@ aws login --profile jozi-buddy</code><button class="copy" type="button">Copy</bu
           <div>
             <h3>Start talking</h3>
             <p>Say hi once it's listening. Press Ctrl+C to end the chat.</p>
-            <div class="cmd"><code>python voice_agent.py</code><button class="copy" type="button">Copy</button></div>
+            <div class="cmd"><code tabindex="0" aria-label="Commands for step 5">python voice_agent.py</code><button class="copy" type="button">Copy</button></div>
           </div>
         </li>
       </ol>
@@ -455,7 +463,6 @@ aws login --profile jozi-buddy</code><button class="copy" type="button">Copy</bu
   const fig = document.getElementById("captions");
   const turns = [...fig.querySelectorAll(".turn")];
   turns.forEach((li) => {
-    const label = li.querySelector("b");
     const words = li.lastChild.textContent.trim().split(/\s+/);
     li.lastChild.remove();
     words.forEach((w, i) => {
@@ -488,20 +495,27 @@ aws login --profile jozi-buddy</code><button class="copy" type="button">Copy</bu
   if (reduce) document.getElementById("replay").hidden = true;
   play();
 
-  /* ---- Copy buttons ---- */
-  document.querySelectorAll(".cmd").forEach((box) => {
+  /* ---- Copy buttons: named per step, result announced, one reset timer per button ---- */
+  const status = document.getElementById("copy-status");
+  document.querySelectorAll(".cmd").forEach((box, i) => {
     const btn = box.querySelector(".copy");
+    const code = box.querySelector("code");
+    const step = i + 1;
+    let reset;
+    btn.setAttribute("aria-label", `Copy the commands for step ${step}`);
     btn.addEventListener("click", async () => {
-      const text = box.querySelector("code").textContent;
+      clearTimeout(reset);
       try {
-        await navigator.clipboard.writeText(text);
+        await navigator.clipboard.writeText(code.textContent);
         btn.textContent = "Copied";
+        status.textContent = `Step ${step} commands copied.`;
       } catch {
-        const range = document.createRange(); range.selectNodeContents(box.querySelector("code"));
+        const range = document.createRange(); range.selectNodeContents(code);
         const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range);
         btn.textContent = "Selected";
+        status.textContent = `Step ${step} commands selected. Press Ctrl+C to copy.`;
       }
-      setTimeout(() => (btn.textContent = "Copy"), 1600);
+      reset = setTimeout(() => (btn.textContent = "Copy"), 1600);
     });
   });
 })();
