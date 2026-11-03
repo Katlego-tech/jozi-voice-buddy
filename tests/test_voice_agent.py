@@ -1,15 +1,18 @@
 """Unit tests for voice_agent. No network, microphone or AWS account is needed."""
 
+import asyncio
 import dataclasses
 from pathlib import Path
 from typing import Any
 
 import boto3
 import pytest
+from aws_sdk_bedrock_runtime.models import AccessDeniedException, ValidationException
 from botocore.exceptions import (
     ClientError,
     EndpointConnectionError,
     LoginRefreshRequired,
+    NoCredentialsError,
     ProfileNotFound,
 )
 from strands.bidi.agent import BidiAgent
@@ -28,6 +31,9 @@ from voice_agent import (
     check_audio_devices,
     check_credentials,
     check_model_available,
+    converse,
+    find_known_error,
+    main,
     make_session,
 )
 
@@ -283,3 +289,253 @@ class TestCheckAudioDevices:
         with pytest.raises(AudioDeviceUnavailable, match=f"No Default {which.title()} Device Available"):
             check_audio_devices(lambda: pa)
         assert pa.terminated == 1
+
+
+# -------------------------------------------------------------- find_known_error ----
+
+
+def chained(outer: BaseException, inner: BaseException) -> BaseException:
+    """Build `outer` with `inner` as its __context__, the way Strands' cleanup masks errors."""
+    try:
+        try:
+            raise inner
+        except BaseException:
+            raise outer  # noqa: B904 - an implicit __context__ is exactly what we are reproducing
+    except BaseException as error:
+        return error
+
+
+class TestFindKnownError:
+    def test_finds_the_bedrock_error_strands_masked(self) -> None:
+        real = ValidationException(message="The provided model identifier is invalid.")
+        masked = chained(RuntimeError("exceptions=[{'func_name': 'stop', ...}]"), real)
+        assert find_known_error(masked) is real
+
+    def test_an_unmasked_known_error_is_found_at_link_zero(self) -> None:
+        real = AccessDeniedException(message="denied")
+        assert find_known_error(real) is real
+
+    def test_follows_explicit_cause_too(self) -> None:
+        real = LoginRefreshRequired()
+        outer = RuntimeError("wrapped")
+        outer.__cause__ = real
+        assert find_known_error(outer) is real
+
+    def test_unrelated_chain_returns_none(self) -> None:
+        assert find_known_error(chained(RuntimeError("outer"), KeyError("inner"))) is None
+
+    def test_a_self_referencing_chain_terminates(self) -> None:
+        a, b = RuntimeError("a"), RuntimeError("b")
+        a.__context__, b.__context__ = b, a
+        assert find_known_error(a) is None
+
+
+# -------------------------------------------------------------------------- converse ----
+
+
+class FakeAgent:
+    def __init__(self) -> None:
+        self.runs: list[tuple[list[Any], list[Any]]] = []
+
+    async def run(self, inputs: list[Any], outputs: list[Any]) -> None:
+        self.runs.append((inputs, outputs))
+
+
+class FakeAudio:
+    def input(self) -> str:
+        return "mic"
+
+    def output(self) -> str:
+        return "speakers"
+
+
+def test_converse_runs_the_agent_with_audio_in_and_out() -> None:
+    agent, audio = FakeAgent(), FakeAudio()
+    asyncio.run(converse(agent, audio))  # type: ignore[arg-type]
+    assert agent.runs == [(["mic"], ["speakers"])]
+
+
+# ------------------------------------------------------------------------------ main ----
+
+READY = (
+    "Jozi Buddy is listening (AWS profile 'jozi-buddy', eu-north-1). "
+    "Start talking \u2014 press Ctrl+C to end the chat.\n"
+)
+GOODBYE = "\nConversation ended. Goodbye!\n"
+SIGN_IN = "Can't sign in to AWS with profile 'jozi-buddy': {reason}\nRun: aws login --profile jozi-buddy\n"
+
+
+class Steps:
+    """Stand-ins for every step main() takes, each able to raise on demand."""
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self.raises: dict[str, BaseException] = {}
+        self.calls: list[str] = []
+        self.audio_kwargs: dict[str, Any] = {}
+        sentinel_session, sentinel_agent = object(), object()
+
+        def step(name: str, result: Any = None) -> Any:
+            def run(*args: Any, **kwargs: Any) -> Any:
+                self.calls.append(name)
+                if name in self.raises:
+                    raise self.raises[name]
+                return result
+
+            return run
+
+        def audio_io(**kwargs: Any) -> object:
+            self.calls.append("AudioIO")
+            self.audio_kwargs = kwargs
+            return object()
+
+        async def fake_converse(agent: Any, audio: Any) -> None:
+            self.calls.append("converse")
+            if "converse" in self.raises:
+                raise self.raises["converse"]
+
+        monkeypatch.setattr("voice_agent.make_session", step("make_session", sentinel_session))
+        monkeypatch.setattr("voice_agent.check_credentials", step("check_credentials"))
+        monkeypatch.setattr("voice_agent.check_model_available", step("check_model_available"))
+        monkeypatch.setattr("voice_agent.check_audio_devices", step("check_audio_devices"))
+        monkeypatch.setattr("voice_agent.build_agent", step("build_agent", sentinel_agent))
+        monkeypatch.setattr("voice_agent.AudioIO", audio_io)
+        monkeypatch.setattr("voice_agent.converse", fake_converse)
+
+
+@pytest.fixture
+def steps(monkeypatch: pytest.MonkeyPatch) -> Steps:
+    return Steps(monkeypatch)
+
+
+class TestMainHappyPath:
+    def test_runs_every_step_in_order_and_says_goodbye(
+        self, steps: Steps, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        assert main({}) == 0
+        assert steps.calls == [
+            "make_session",
+            "check_credentials",
+            "check_model_available",
+            "check_audio_devices",
+            "build_agent",
+            "AudioIO",
+            "converse",
+        ]
+        assert steps.audio_kwargs == {"audio_processor": True}
+        out = capsys.readouterr()
+        assert out.out == READY + GOODBYE
+        assert out.err == ""
+
+    def test_ready_line_names_an_overridden_profile_and_region(
+        self, steps: Steps, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        main({"AWS_PROFILE": "other", "JOZI_BUDDY_REGION": "us-east-1"})
+        assert "(AWS profile 'other', us-east-1)" in capsys.readouterr().out
+
+    def test_ctrl_c_during_the_conversation_says_goodbye_and_exits_zero(
+        self, steps: Steps, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        steps.raises["converse"] = KeyboardInterrupt()
+        assert main({}) == 0
+        assert capsys.readouterr().out == READY + GOODBYE
+
+    def test_ctrl_c_during_preflight_says_goodbye_and_exits_zero(
+        self, steps: Steps, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        steps.raises["check_audio_devices"] = KeyboardInterrupt()
+        assert main({}) == 0
+        assert capsys.readouterr().out == GOODBYE
+
+
+class TestMainPreflightFailures:
+    @pytest.mark.parametrize(
+        ("step", "error", "reason"),
+        [
+            (
+                "make_session",
+                ProfileNotFound(profile="jozi-buddy"),
+                "The config profile (jozi-buddy) could not be found",
+            ),
+            ("check_credentials", CredentialsUnavailable("no credentials found"), "no credentials found"),
+            ("check_credentials", NoCredentialsError(), "Unable to locate credentials"),
+            (
+                "check_credentials",
+                LoginRefreshRequired(),
+                "Your session has expired or credentials have changed. "
+                "Please reauthenticate using 'aws login'.",
+            ),
+        ],
+    )
+    def test_credential_problems_exit_2_with_the_sign_in_message(
+        self, steps: Steps, capsys: pytest.CaptureFixture[str], step: str, error: Exception, reason: str
+    ) -> None:
+        steps.raises[step] = error
+        assert main({}) == 2
+        out = capsys.readouterr()
+        assert out.err == SIGN_IN.format(reason=reason)
+        assert out.out == ""
+
+    def test_model_not_in_region_exits_4(self, steps: Steps, capsys: pytest.CaptureFixture[str]) -> None:
+        steps.raises["check_model_available"] = ModelUnavailable("not offered")
+        assert main({"JOZI_BUDDY_REGION": "eu-west-1"}) == 4
+        assert capsys.readouterr().err == (
+            "Amazon Nova Sonic (amazon.nova-2-5-sonic) isn't available in eu-west-1.\n"
+            "Set JOZI_BUDDY_REGION to a region that offers it, such as eu-north-1.\n"
+        )
+
+    def test_no_network_exits_5(self, steps: Steps, capsys: pytest.CaptureFixture[str]) -> None:
+        error = EndpointConnectionError(endpoint_url="https://bedrock.eu-north-1.amazonaws.com")
+        steps.raises["check_model_available"] = error
+        assert main({}) == 5
+        assert capsys.readouterr().err == (
+            f"Can't reach AWS in eu-north-1: {error}\n"
+            "Check your internet connection, then run Jozi Buddy again.\n"
+        )
+
+    def test_no_audio_device_exits_3(self, steps: Steps, capsys: pytest.CaptureFixture[str]) -> None:
+        steps.raises["check_audio_devices"] = AudioDeviceUnavailable("No Default Input Device Available")
+        assert main({}) == 3
+        assert capsys.readouterr().err == (
+            "Can't use the microphone or speakers: No Default Input Device Available\n"
+            "Check your sound settings, then run Jozi Buddy again.\n"
+        )
+
+
+class TestMainConversationFailures:
+    def test_masked_access_denied_exits_4(self, steps: Steps, capsys: pytest.CaptureFixture[str]) -> None:
+        steps.raises["converse"] = chained(
+            RuntimeError("cleanup failed"), AccessDeniedException(message="no access")
+        )
+        assert main({}) == 4
+        assert capsys.readouterr().err == (
+            "Amazon Bedrock refused access to amazon.nova-2-5-sonic in eu-north-1: no access\n"
+            "Check that this account can use the model in that region.\n"
+        )
+
+    def test_masked_other_bedrock_error_exits_4(
+        self, steps: Steps, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        real = ValidationException(message="The provided model identifier is invalid.")
+        steps.raises["converse"] = chained(RuntimeError("cleanup failed"), real)
+        assert main({}) == 4
+        assert capsys.readouterr().err == (
+            "Amazon Bedrock error (ValidationException) for amazon.nova-2-5-sonic in eu-north-1: "
+            "The provided model identifier is invalid.\n"
+        )
+
+    def test_session_expiring_at_a_reconnect_exits_2(
+        self, steps: Steps, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        steps.raises["converse"] = chained(RuntimeError("cleanup failed"), LoginRefreshRequired())
+        assert main({}) == 2
+        reason = (
+            "Your session has expired or credentials have changed. Please reauthenticate using 'aws login'."
+        )
+        assert capsys.readouterr().err == SIGN_IN.format(reason=reason)
+
+    def test_an_unexpected_error_is_not_swallowed(self, steps: Steps) -> None:
+        boom = RuntimeError("a real bug")
+        steps.raises["converse"] = boom
+        with pytest.raises(RuntimeError) as caught:
+            main({})
+        assert caught.value is boom
